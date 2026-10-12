@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: transparent;
+      color: #e8eefc;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    .tour {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.8fr) minmax(230px, 1.2fr);
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid #263656;
+      border-radius: 18px;
+      background: radial-gradient(ellipse at 22% 42%, #182d53 0, #10182a 48%, #0d1321 100%);
+      box-shadow: 0 18px 50px #0005;
+    }
+    .scene {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 65%, #26c7e91c, transparent 38%),
+        radial-gradient(ellipse at 50% 96%, #6956f528, transparent 55%);
+    }
+    .scene::after {
+      position: absolute;
+      right: 12%;
+      bottom: 8%;
+      left: 12%;
+      height: 30px;
+      border: 1px solid #55c8e644;
+      border-radius: 50%;
+      background: #24a8cc12;
+      box-shadow: 0 0 30px #19c3e833, inset 0 0 20px #19c3e822;
+      content: "";
+    }
+    #robot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .fallback { position: absolute; inset: 0; display: grid; place-items: center; font-size: 100px; }
+    .scene.ready .fallback { display: none; }
+    .scene-label {
+      position: absolute;
+      z-index: 2;
+      bottom: 18px;
+      left: 18px;
+      color: #a9c8e8;
+      font-size: 12px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .guide { display: flex; min-width: 0; flex-direction: column; padding: 14px 16px 12px; }
+    .eyebrow { color: #5dd6ee; font-size: 11px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    h2 { margin: 8px 0 5px; font-size: clamp(23px, 3vw, 31px); }
+    .step { color: #a8b6d0; font-size: 13px; }
+    .progress { height: 4px; margin: 16px 0 18px; overflow: hidden; border-radius: 8px; background: #26334b; }
+    .progress span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #36d2ef, #8b7cff); transition: width .3s ease; }
+    .narration {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      color: #e1e8f5;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    .voice-note { min-height: 18px; color: #8798b6; font-size: 12px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    button {
+      min-height: 35px;
+      padding: 0 11px;
+      border: 1px solid #354564;
+      border-radius: 10px;
+      background: #19253a;
+      color: #e9f1ff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    button:hover { border-color: #56cde7; background: #20334c; }
+    button:focus-visible { outline: 2px solid #5dd6ee; outline-offset: 2px; }
+    button.primary { border-color: #42c7e0; background: linear-gradient(120deg, #147caa, #6557c7); }
+    @media (max-width: 520px) {
+      .tour { grid-template-columns: minmax(110px, 0.72fr) minmax(190px, 1.28fr); }
+      .guide { padding: 10px; }
+      .eyebrow { font-size: 9px; }
+      h2 { font-size: 19px; }
+      .narration { font-size: 13px; line-height: 1.45; }
+      .controls { gap: 5px; margin-top: 6px; }
+      button { min-height: 30px; padding: 0 8px; font-size: 11px; }
+      .voice-note { font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="tour" aria-label="Project tour with 3D robot guide">
+    <section class="scene" id="scene" aria-label="Animated robot">
+      <div class="fallback" aria-hidden="true">🤖</div>
+      <canvas id="robot-canvas"></canvas>
+      <div class="scene-label">Your gateway guide</div>
+    </section>
+    <section class="guide">
+      <div class="eyebrow">Interactive project tour</div>
+      <h2 id="chapter-title">Welcome to the gateway</h2>
+      <div class="step" id="step-count">Chapter 1 of 7</div>
+      <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+      <div class="narration" id="narration" aria-live="polite"></div>
+      <div class="voice-note" id="voice-note">Starting the project tour. If voice is blocked, choose Start tour.</div>
+      <div class="controls">
+        <button class="primary" id="start" type="button">Start tour</button>
+        <button id="previous" type="button">Previous</button>
+        <button id="next" type="button">Next</button>
+        <button id="stop" type="button">Stop voice</button>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    const chapters = [
+      {
+        title: "Welcome to the gateway",
+        text: "This project is a multi-model language model gateway. Instead of sending every request to the same model, it chooses a route using privacy needs, prompt size, complexity, and the latency target."
+      },
+      {
+        title: "1. A request arrives",
+        text: "The Streamlit page is the control panel. You enter a prompt, choose a maximum latency, and can mark the request as private. When you press Send Through Gateway, the page sends those values as JSON to the FastAPI service."
+      },
+      {
+        title: "2. FastAPI validates it",
+        text: "FastAPI receives the request at the chat completions endpoint. A Pydantic request model checks the prompt and options before the router makes a decision."
+      },
+      {
+        title: "3. The router chooses a route",
+        text: "Privacy is checked first and selects the private micro tier. Very long prompts can be routed to the Gemini tier. Otherwise a lightweight classifier estimates complexity; the latency target and that estimate help choose a fast or larger route."
+      },
+      {
+        title: "4. The selected route runs",
+        text: "The dispatcher handles the selected model route. Provider calls need their API keys configured on the backend. Without those keys, some routes return clearly marked demo responses; the private micro route is currently a placeholder response, not a locally running language model."
+      },
+      {
+        title: "5. The result comes back",
+        text: "FastAPI returns the response, selected model name, and measured latency. Streamlit displays those details. The cache and circuit-breaker modules exist in the project, but they are not currently wired into this request flow."
+      },
+      {
+        title: "6. Run it in the cloud",
+        text: "Streamlit Community Cloud hosts the page, while FastAPI must be hosted separately at a publicly reachable HTTPS address. Set API_BASE_URL in the Streamlit app secrets to that backend URL. A local address such as 127.0.0.1 only works when both services are running on the same computer."
+      }
+    ];
+
+    const title = document.getElementById("chapter-title");
+    const narration = document.getElementById("narration");
+    const stepCount = document.getElementById("step-count");
+    const progress = document.getElementById("progress");
+    const voiceNote = document.getElementById("voice-note");
+    const scene = document.getElementById("scene");
+    let current = 0;
+    let robotSpeaking = false;
+    let renderer;
+    let head;
+    let leftArm;
+    let rightArm;
+    let mouth;
+    let animationFrame;
+    let startedAt = performance.now();
+
+    function setChapter(index, speak = false) {
+      current = (index + chapters.length) % chapters.length;
+      const chapter = chapters[current];
+      title.textContent = chapter.title;
+      narration.textContent = chapter.text;
+      stepCount.textContent = `Chapter ${current + 1} of ${chapters.length}`;
+      progress.style.width = `${((current + 1) / chapters.length) * 100}%`;
+
+      if (speak) {
+        if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+          voiceNote.textContent = "Speech synthesis is not available in this browser.";
+          return;
+        }
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(
+          `${chapter.title}. ${chapter.text}`
+        );
+        utterance.rate = 0.96;
+        utterance.onstart = () => {
+          robotSpeaking = true;
+          voiceNote.textContent = "Speaking with your browser's free built-in voice.";
+        };
+        utterance.onend = () => {
+          robotSpeaking = false;
+          voiceNote.textContent = "Chapter complete. Continue when you're ready.";
+        };
+        utterance.onerror = () => {
+          robotSpeaking = false;
+          voiceNote.textContent = "Voice playback failed; you can still read the explanation.";
+        };
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    document.getElementById("start").addEventListener("click", () => setChapter(0, true));
+    document.getElementById("previous").addEventListener("click", () => setChapter(current - 1, true));
+    document.getElementById("next").addEventListener("click", () => setChapter(current + 1, true));
+    document.getElementById("stop").addEventListener("click", () => {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      robotSpeaking = false;
+      voiceNote.textContent = "Voice stopped. The written explanation remains available.";
+    });
+
+    setChapter(0);
+    window.setTimeout(() => setChapter(0, true), 250);
+
+    try {
+      const THREE = await import(
+        "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js"
+      );
+      const canvas = document.getElementById("robot-canvas");
+      const rendererOptions = { canvas, alpha: true, antialias: true };
+      renderer = new THREE.WebGLRenderer(rendererOptions);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(scene.clientWidth, scene.clientHeight, false);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.shadowMap.enabled = true;
+
+      const world = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(
+        34,
+        scene.clientWidth / scene.clientHeight,
+        0.1,
+        100
+      );
+      camera.position.set(0, 0.2, 8.5);
+
+      world.add(new THREE.HemisphereLight(0xc8eaff, 0x12182c, 2));
+      const keyLight = new THREE.DirectionalLight(0xfff2dc, 4);
+      keyLight.position.set(-3, 5, 6);
+      world.add(keyLight);
+      const fillLight = new THREE.PointLight(0x536dff, 24, 14);
+      fillLight.position.set(-3, 0, 3);
+      world.add(fillLight);
+      const rimLight = new THREE.PointLight(0x31d7ff, 30, 12);
+      rimLight.position.set(3, 1, -2);
+      world.add(rimLight);
+
+      const robot = new THREE.Group();
+      world.add(robot);
+
+      const metal = new THREE.MeshPhysicalMaterial({
+        color: 0xc3d6ee, metalness: 0.78, roughness: 0.22, clearcoat: 0.8,
+        clearcoatRoughness: 0.2
+      });
+      const darkMetal = new THREE.MeshPhysicalMaterial({
+        color: 0x1a2940, metalness: 0.82, roughness: 0.27, clearcoat: 0.55
+      });
+      const trim = new THREE.MeshStandardMaterial({
+        color: 0x6482a8, metalness: 0.85, roughness: 0.24
+      });
+      const cyan = new THREE.MeshPhysicalMaterial({
+        color: 0x91f5ff, emissive: 0x12bde0, emissiveIntensity: 2.1,
+        metalness: 0.25, roughness: 0.16, clearcoat: 1
+      });
+      const amber = new THREE.MeshStandardMaterial({
+        color: 0xffd48a, emissive: 0xe87812, emissiveIntensity: 0.85,
+        metalness: 0.35, roughness: 0.25
+      });
+      const faceMaterial = new THREE.MeshPhysicalMaterial({
+        color: 0x08111f, metalness: 0.38, roughness: 0.12,
+        clearcoat: 1, clearcoatRoughness: 0.08
+      });
+
+      function addShape(parent, geometry, material, position, scale) {
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(...position);
+        if (scale) mesh.scale.set(...scale);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        parent.add(mesh);
+        return mesh;
+      }
+
+      addShape(robot, new THREE.CapsuleGeometry(0.76, 1.05, 8, 24), darkMetal, [0, -0.62, 0]);
+      addShape(robot, new THREE.SphereGeometry(0.72, 32, 24), metal, [0, -0.56, 0.13], [0.94, 0.9, 0.82]);
+      addShape(robot, new THREE.BoxGeometry(0.48, 0.18, 0.35), trim, [0, 0.2, 0]);
+
+      const chest = new THREE.Group();
+      chest.position.set(0, -0.62, 0.71);
+      robot.add(chest);
+      addShape(chest, new THREE.SphereGeometry(0.53, 32, 24), metal, [0, 0, 0], [1, 1.08, 0.3]);
+      addShape(chest, new THREE.SphereGeometry(0.41, 32, 24), darkMetal, [0, 0, 0.13], [1, 1.07, 0.3]);
+      addShape(chest, new THREE.TorusGeometry(0.2, 0.035, 12, 48), trim, [0, 0.02, 0.235]);
+      addShape(chest, new THREE.SphereGeometry(0.145, 24, 18), cyan, [0, 0.02, 0.25], [1, 1, 0.38]);
+      addShape(chest, new THREE.BoxGeometry(0.035, 0.38, 0.025), cyan, [-0.32, 0, 0.2]);
+      addShape(chest, new THREE.BoxGeometry(0.035, 0.38, 0.025), cyan, [0.32, 0, 0.2]);
+      for (const x of [-0.4, 0.4]) {
+        for (const y of [-0.31, 0.31]) {
+          const fastener = addShape(
+            chest, new THREE.CylinderGeometry(0.035, 0.035, 0.018, 16), amber,
+            [x, y, 0.18]
+          );
+          fastener.rotation.x = Math.PI / 2;
+        }
+      }
+      for (let i = 0; i < 3; i += 1) {
+        addShape(
+          chest, new THREE.BoxGeometry(0.12, 0.025, 0.02), i === 0 ? amber : cyan,
+          [-0.12 + i * 0.12, -0.38, 0.19]
+        );
+      }
+
+      head = new THREE.Group();
+      head.position.set(0, 1.05, 0);
+      robot.add(head);
+      addShape(head, new THREE.SphereGeometry(0.88, 40, 32), darkMetal, [0, 0.38, 0]);
+      addShape(head, new THREE.SphereGeometry(0.82, 40, 32), metal, [0, 0.42, 0.06], [1, 0.96, 0.88]);
+      addShape(head, new THREE.SphereGeometry(0.7, 40, 32), faceMaterial, [0, 0.37, 0.48], [1, 0.72, 0.43]);
+
+      const eyeGeo = new THREE.SphereGeometry(0.105, 24, 18);
+      for (const x of [-0.29, 0.29]) {
+        addShape(head, new THREE.TorusGeometry(0.15, 0.026, 12, 36), trim, [x, 0.43, 0.83]);
+        addShape(head, eyeGeo, cyan, [x, 0.43, 0.84], [0.78, 1.35, 0.5]);
+        addShape(head, new THREE.SphereGeometry(0.027, 12, 10), metal, [x - 0.025, 0.47, 0.89]);
+        addShape(head, new THREE.BoxGeometry(0.22, 0.045, 0.035), metal, [x, 0.64, 0.79])
+          .rotation.z = x < 0 ? -0.12 : 0.12;
+      }
+
+      mouth = new THREE.Group();
+      mouth.position.set(0, 0.1, 0.865);
+      head.add(mouth);
+      addShape(mouth, new THREE.BoxGeometry(0.28, 0.025, 0.02), cyan, [0, 0.035, 0]);
+      addShape(mouth, new THREE.BoxGeometry(0.18, 0.025, 0.02), cyan, [0, -0.025, 0]);
+      addShape(mouth, new THREE.BoxGeometry(0.08, 0.018, 0.02), amber, [0, -0.08, 0]);
+
+      const antenna = new THREE.Group();
+      antenna.position.set(0, 1.15, 0);
+      head.add(antenna);
+      addShape(antenna, new THREE.CylinderGeometry(0.045, 0.07, 0.37, 16), trim, [0, 0.16, 0]);
+      addShape(antenna, new THREE.SphereGeometry(0.13, 20, 16), cyan, [0, 0.38, 0]);
+      for (const x of [-0.83, 0.83]) {
+        const ear = addShape(
+          head, new THREE.CylinderGeometry(0.2, 0.23, 0.2, 24), darkMetal,
+          [x, 0.32, 0.04]
+        );
+        ear.rotation.z = Math.PI / 2;
+        addShape(head, new THREE.TorusGeometry(0.13, 0.028, 10, 28), trim, [x * 1.12, 0.32, 0.1]);
+        addShape(head, new THREE.SphereGeometry(0.075, 16, 12), amber, [x * 1.12, 0.32, 0.1]);
+      }
+
+      leftArm = new THREE.Group();
+      leftArm.position.set(-0.77, 0.02, 0);
+      robot.add(leftArm);
+      const leftShoulder = addShape(leftArm, new THREE.SphereGeometry(0.34, 24, 20), metal, [-0.06, -0.07, 0]);
+      leftShoulder.scale.set(1, 0.82, 0.9);
+      addShape(leftArm, new THREE.SphereGeometry(0.2, 20, 16), darkMetal, [-0.08, -0.08, 0.22]);
+      addShape(leftArm, new THREE.CapsuleGeometry(0.15, 0.34, 6, 16), metal, [-0.19, -0.38, 0], [1, 1, 0.92]);
+      addShape(leftArm, new THREE.TorusGeometry(0.15, 0.04, 10, 24), trim, [-0.22, -0.63, 0]);
+      addShape(leftArm, new THREE.SphereGeometry(0.17, 20, 16), darkMetal, [-0.23, -0.68, 0]);
+      addShape(leftArm, new THREE.CapsuleGeometry(0.13, 0.31, 6, 16), metal, [-0.31, -0.9, 0], [1, 1, 0.92]);
+      addShape(leftArm, new THREE.SphereGeometry(0.2, 20, 16), trim, [-0.35, -1.14, 0.02], [1, 0.82, 0.75]);
+      for (let finger = 0; finger < 3; finger += 1) {
+        addShape(leftArm, new THREE.CapsuleGeometry(0.035, 0.12, 4, 8), darkMetal,
+          [-0.47 + finger * 0.1, -1.29, 0.03]);
+      }
+
+      rightArm = new THREE.Group();
+      rightArm.position.set(0.77, 0.02, 0);
+      robot.add(rightArm);
+      const rightShoulder = addShape(rightArm, new THREE.SphereGeometry(0.34, 24, 20), metal, [0.06, -0.07, 0]);
+      rightShoulder.scale.set(1, 0.82, 0.9);
+      addShape(rightArm, new THREE.SphereGeometry(0.2, 20, 16), darkMetal, [0.08, -0.08, 0.22]);
+      addShape(rightArm, new THREE.CapsuleGeometry(0.15, 0.34, 6, 16), metal, [0.19, -0.38, 0], [1, 1, 0.92]);
+      addShape(rightArm, new THREE.TorusGeometry(0.15, 0.04, 10, 24), trim, [0.22, -0.63, 0]);
+      addShape(rightArm, new THREE.SphereGeometry(0.17, 20, 16), darkMetal, [0.23, -0.68, 0]);
+      addShape(rightArm, new THREE.CapsuleGeometry(0.13, 0.31, 6, 16), metal, [0.31, -0.9, 0], [1, 1, 0.92]);
+      addShape(rightArm, new THREE.SphereGeometry(0.2, 20, 16), trim, [0.35, -1.14, 0.02], [1, 0.82, 0.75]);
+      for (let finger = 0; finger < 3; finger += 1) {
+        addShape(rightArm, new THREE.CapsuleGeometry(0.035, 0.12, 4, 8), darkMetal,
+          [0.27 + finger * 0.1, -1.29, 0.03]);
+      }
+
+      addShape(robot, new THREE.CylinderGeometry(0.2, 0.22, 0.45, 20), darkMetal, [-0.36, -1.65, 0]);
+      addShape(robot, new THREE.CylinderGeometry(0.2, 0.22, 0.45, 20), darkMetal, [0.36, -1.65, 0]);
+      for (const x of [-0.36, 0.36]) {
+        addShape(robot, new THREE.TorusGeometry(0.17, 0.035, 10, 24), trim, [x, -1.49, 0]);
+        addShape(robot, new THREE.SphereGeometry(0.25, 24, 16), metal, [x, -1.91, 0.13], [1.3, 0.48, 1.65]);
+        addShape(robot, new THREE.BoxGeometry(0.1, 0.025, 0.05), cyan, [x, -1.91, 0.42]);
+      }
+
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(1.7, 0.012, 8, 100),
+        new THREE.MeshBasicMaterial({ color: 0x45cfe8, transparent: true, opacity: 0.36 })
+      );
+      halo.position.set(0, -0.1, -0.7);
+      halo.rotation.x = Math.PI / 2.8;
+      robot.add(halo);
+
+      const resizeObserver = new ResizeObserver(() => {
+        const width = scene.clientWidth;
+        const height = scene.clientHeight;
+        if (!width || !height) return;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      });
+      resizeObserver.observe(scene);
+
+      scene.classList.add("ready");
+      function animate(now) {
+        animationFrame = requestAnimationFrame(animate);
+        const elapsed = (now - startedAt) / 1000;
+        robot.position.y = Math.sin(elapsed * 1.5) * 0.08;
+        robot.rotation.y = Math.sin(elapsed * 0.45) * 0.12;
+        head.rotation.y = Math.sin(elapsed * 0.8) * 0.12;
+        halo.rotation.z = elapsed * 0.18;
+        rightArm.rotation.z = robotSpeaking
+          ? Math.sin(elapsed * 10) * 0.38 - 0.2
+          : Math.sin(elapsed * 1.8) * 0.07;
+        leftArm.rotation.z = Math.sin(elapsed * 1.2) * 0.06;
+        mouth.scale.y = robotSpeaking ? 1 + Math.abs(Math.sin(elapsed * 13)) * 1.8 : 1;
+        renderer.render(world, camera);
+      }
+      animate(performance.now());
+    } catch (error) {
+      console.error("Unable to initialize the 3D mascot:", error);
+      voiceNote.textContent =
+        "3D view needs WebGL and internet access; the tour text and voice still work.";
+    }
+  </script>
+</body>
+</html>

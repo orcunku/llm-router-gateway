@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LLM Router Gateway Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Multi-Model LLM Gateway & Adaptive Router</h1>
+    </header>
+
+    <main class="dashboard">
+      <!-- Mascot Column -->
+      <section class="card mascot-card">
+        <div class="avatar-box">
+          <div class="robot-face">🤖</div>
+        </div>
+        <p id="narrator-text">Welcome! Click "Start Guided Tour" to learn how my gateway cuts LLM costs by 50%+.</p>
+        <button class="btn" onclick="nextChapter()">Start Guided Tour</button>
+      </section>
+
+      <!-- Live Interactive Controls -->
+      <section class="card demo-card">
+        <h3>Live Gateway Request Test</h3>
+        <textarea id="prompt-input" rows="3" placeholder="Enter prompt (e.g., 'Write a Python script for quicksort')"></textarea>
+        <button class="btn secondary" onclick="sendRequest()">Send Through Gateway</button>
+        <pre id="response-output">Response output will appear here...</pre>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
